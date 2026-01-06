@@ -2,9 +2,9 @@ services:
   - type: web
     name: vidsto-api
     env: node
-    rootDir: /
-    buildCommand: npm install && mkdir -p data temp/videos temp/images uploads/featured-videos logs
-    startCommand: mkdir -p data temp/videos temp/images uploads/featured-videos logs && node server/index.js
+    rootDir: ./
+    buildCommand: npm install && mkdir -p ./data ./temp/videos ./temp/images ./uploads/featured-videos ./logs
+    startCommand: mkdir -p ./data ./temp/videos ./temp/images ./uploads/featured-videos ./logs && node ./server/index.js
     envVars:
       - key: NODE_ENV
         value: production
