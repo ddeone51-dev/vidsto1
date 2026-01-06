@@ -3,7 +3,7 @@ services:
     name: vidsto-api
     env: node
     buildCommand: npm install
-    startCommand: node server/index.js
+    startCommand: ls -la && pwd && ls -la server/ && node server/index.js
     envVars:
       - key: NODE_ENV
         value: production
