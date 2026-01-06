@@ -10,4 +10,6 @@ services:
         value: production
       - key: PORT
         value: 4000
+      - key: USE_VERTEX_AI_GEMINI
+        value: "false"
 
