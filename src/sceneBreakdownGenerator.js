@@ -17,7 +17,7 @@ export class SceneBreakdownGenerator {
     if (shouldUseVertexAI) {
       // Use Vertex AI Gemini
       console.log("[SceneBreakdownGenerator] Using Vertex AI Gemini for scene generation");
-      this.vertexGemini = new VertexGeminiGenerator({ modelName: modelName === "gemini-2.5-flash" ? "gemini-1.5-flash" : modelName });
+      this.vertexGemini = new VertexGeminiGenerator({ modelName: modelName === "gemini-2.5-flash" ? "gemini-1.5-flash-001" : modelName });
       this.useVertexAI = true;
       this.model = null; // Not used when using Vertex AI
     } else if (!model) {

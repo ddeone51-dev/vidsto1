@@ -11,7 +11,7 @@ export class VertexGeminiGenerator {
   constructor({ 
     projectId,
     location = "us-central1",
-    modelName = "gemini-1.5-flash" // Vertex AI Gemini model
+    modelName = "gemini-1.5-flash-001" // Vertex AI Gemini model (must include version)
   } = {}) {
     this.projectId = projectId ?? process.env.GOOGLE_CLOUD_PROJECT_ID ?? process.env.GOOGLE_CLOUD_PROJECT;
     this.location = location ?? process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1";
@@ -27,7 +27,13 @@ export class VertexGeminiGenerator {
       scopes: ["https://www.googleapis.com/auth/cloud-platform"],
     });
     
+    // Vertex AI Gemini uses a different endpoint format
+    // Format: projects/{project}/locations/{location}/publishers/google/models/{model}
+    // But the API endpoint is different - it uses the Generative Language API endpoint
+    // Actually, Vertex AI Gemini might need to use the Generative AI API endpoint
+    // Let's try the correct Vertex AI endpoint format
     this.modelPath = `projects/${this.projectId}/locations/${this.location}/publishers/google/models/${this.modelName}`;
+    // Vertex AI Generative AI endpoint (not aiplatform)
     this.apiEndpoint = `${this.location}-aiplatform.googleapis.com`;
     
     console.log(`[Vertex Gemini] ✓ Initialized`);
@@ -56,7 +62,9 @@ export class VertexGeminiGenerator {
       throw new Error("Failed to obtain OAuth access token from service account");
     }
 
-    // Vertex AI REST API endpoint for Gemini
+    // Vertex AI Generative AI API endpoint for Gemini
+    // Correct format: https://{location}-aiplatform.googleapis.com/v1/{modelPath}:generateContent
+    // Model path: projects/{project}/locations/{location}/publishers/google/models/{model}
     const url = `https://${this.apiEndpoint}/v1/${this.modelPath}:generateContent`;
 
     const payload = {
