@@ -2,8 +2,8 @@ services:
   - type: web
     name: vidsto-api
     env: node
-    buildCommand: npm install
-    startCommand: pwd && ls -la && if [ -d "server" ]; then ls -la server/ && node server/index.js; else echo "Server directory not found!" && find . -name "index.js" -type f; fi
+    buildCommand: npm install && mkdir -p data temp/videos temp/images uploads/featured-videos logs
+    startCommand: mkdir -p data temp/videos temp/images uploads/featured-videos logs && node server/index.js
     envVars:
       - key: NODE_ENV
         value: production
