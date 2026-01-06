@@ -1,0 +1,47 @@
+{
+  "name": "vidsto",
+  "version": "1.0.0",
+  "description": "Vidisto AI story creation toolkit",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "vitest run --config vitest.config.mjs",
+    "dev:server": "node server/index.js",
+    "dev:web": "cd web && npm run dev",
+    "dev": "npm run dev:server",
+    "build": "cd web && npm install && npm run build",
+    "build:production": "npm run build && npm run generate:thumbnails",
+    "start": "node server/index.js",
+    "start:pm2": "pm2 start pm2.config.js",
+    "generate:category-images": "node scripts/generateCategoryImages.js",
+    "generate:thumbnails": "node scripts/generateThumbnails.js",
+    "backup": "./scripts/backup.sh",
+    "migrate": "node scripts/migrate.js"
+  },
+  "keywords": [
+    "ai",
+    "story",
+    "gemini",
+    "vidisto"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@google-cloud/aiplatform": "^6.0.0",
+    "@google/generative-ai": "^0.24.1",
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "^12.5.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.1",
+    "google-auth-library": "^10.5.0",
+    "gtts": "^0.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.0.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "supertest": "^7.1.1",
+    "vitest": "^4.0.9"
+  }
+}
