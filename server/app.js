@@ -219,22 +219,30 @@ export function createServer(services) {
   app.post("/api/auth/register", async (req, res, next) => {
     try {
       const { email, password, name } = z.object({
-        email: z.string().email(),
-        password: z.string().min(6),
-        name: z.string().min(1),
+        email: z.string().email("Invalid email address"),
+        password: z.string().min(6, "Password must be at least 6 characters"),
+        name: z.string().min(1, "Name is required"),
       }).parse(req.body);
 
-      const existingUser = userDb.findByEmail(email);
+      const existingUser = userDb.findByEmail(email.toLowerCase().trim());
       if (existingUser) {
-        return res.status(400).json({ error: "User already exists" });
+        return res.status(400).json({ error: "User already exists", message: "An account with this email already exists" });
       }
 
-      const userId = userDb.create(email, password, name);
+      const userId = userDb.create(email.toLowerCase().trim(), password, name.trim());
       const token = generateToken(userId);
       const user = userDb.findById(userId);
 
-      res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+      if (!user) {
+        return res.status(500).json({ error: "Registration failed", message: "Failed to create user account" });
+      }
+
+      res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role || "user" } });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errorMessages = error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join("; ");
+        return res.status(400).json({ error: "ValidationError", message: errorMessages, details: error.errors });
+      }
       next(error);
     }
   });
@@ -242,26 +250,31 @@ export function createServer(services) {
   app.post("/api/auth/login", async (req, res, next) => {
     try {
       const { email, password } = z.object({
-        email: z.string().email(),
-        password: z.string(),
+        email: z.string().email("Invalid email address"),
+        password: z.string().min(1, "Password is required"),
       }).parse(req.body);
 
-      const user = userDb.findByEmail(email);
+      const user = userDb.findByEmail(email.toLowerCase().trim());
       if (!user || !user.password_hash) {
-        return res.status(401).json({ error: "Invalid credentials" });
+        return res.status(401).json({ error: "Invalid credentials", message: "Invalid email or password" });
       }
 
       if (!userDb.verifyPassword(password, user.password_hash)) {
-        return res.status(401).json({ error: "Invalid credentials" });
+        return res.status(401).json({ error: "Invalid credentials", message: "Invalid email or password" });
       }
 
-      if (user.is_active === 0) {
-        return res.status(403).json({ error: "Account is deactivated" });
+      // Check if account is active (default to active if is_active is null/undefined)
+      if (user.is_active !== undefined && user.is_active !== null && user.is_active === 0) {
+        return res.status(403).json({ error: "Account is deactivated", message: "Your account has been deactivated. Please contact support." });
       }
 
       const token = generateToken(user.id);
       res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role || "user" } });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        const errorMessages = error.errors.map(e => `${e.path.join(".")}: ${e.message}`).join("; ");
+        return res.status(400).json({ error: "ValidationError", message: errorMessages, details: error.errors });
+      }
       next(error);
     }
   });
@@ -1420,8 +1433,13 @@ export function createServer(services) {
 
   app.use((error, _req, res, _next) => {
     if (error instanceof z.ZodError) {
+      const errorMessages = error.issues.map(issue => {
+        const path = issue.path.length > 0 ? issue.path.join(".") : "root";
+        return `${path}: ${issue.message}`;
+      }).join("; ");
       return res.status(400).json({
         error: "ValidationError",
+        message: errorMessages,
         details: error.issues,
       });
     }
