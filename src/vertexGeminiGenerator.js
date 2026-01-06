@@ -63,9 +63,12 @@ export class VertexGeminiGenerator {
     }
 
     // Vertex AI Generative AI API endpoint for Gemini
-    // Correct format: https://{location}-aiplatform.googleapis.com/v1/{modelPath}:generateContent
+    // Try v1beta first (newer API version)
+    // Format: https://{location}-aiplatform.googleapis.com/v1beta/{modelPath}:generateContent
     // Model path: projects/{project}/locations/{location}/publishers/google/models/{model}
-    const url = `https://${this.apiEndpoint}/v1/${this.modelPath}:generateContent`;
+    let url = `https://${this.apiEndpoint}/v1beta/${this.modelPath}:generateContent`;
+    
+    console.log(`[Vertex Gemini] Calling: ${url}`);
 
     const payload = {
       contents: [
