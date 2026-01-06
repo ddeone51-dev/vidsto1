@@ -1,7 +1,8 @@
 import { PredictionServiceClient } from "@google-cloud/aiplatform";
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join, resolve } from "path";
+import { tmpdir } from "os";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -23,10 +24,26 @@ export class VertexAIImageGenerator {
     // Consider using imagen-3.0-fast-generate-001 for higher throughput (if available)
   } = {}) {
     // Determine service account path
-    // Priority: 1) explicit parameter, 2) GOOGLE_APPLICATION_CREDENTIALS env var, 3) default vertex-sa.json
-    const saPath = serviceAccountPath 
-      ?? process.env.GOOGLE_APPLICATION_CREDENTIALS 
-      ?? resolve(process.cwd(), "vertex-sa.json");
+    // Priority: 1) explicit parameter, 2) GOOGLE_APPLICATION_CREDENTIALS env var, 3) VERTEX_SA_JSON env var (create temp file), 4) default vertex-sa.json
+    let saPath = serviceAccountPath ?? process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    
+    // If VERTEX_SA_JSON environment variable is set, create a temp file from it
+    if (!saPath && process.env.VERTEX_SA_JSON) {
+      try {
+        const tempDir = tmpdir();
+        const tempSaPath = join(tempDir, `vertex-sa-${Date.now()}.json`);
+        writeFileSync(tempSaPath, process.env.VERTEX_SA_JSON, "utf8");
+        saPath = tempSaPath;
+        console.log(`[Vertex AI] ✓ Created service account file from VERTEX_SA_JSON environment variable: ${saPath}`);
+      } catch (error) {
+        throw new Error(`Failed to create service account file from VERTEX_SA_JSON: ${error.message}`);
+      }
+    }
+    
+    // Fallback to default path if still not set
+    if (!saPath) {
+      saPath = resolve(process.cwd(), "vertex-sa.json");
+    }
     
     this.projectId = projectId ?? process.env.GOOGLE_CLOUD_PROJECT_ID ?? process.env.GOOGLE_CLOUD_PROJECT;
     this.location = location ?? process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1";
