@@ -62,19 +62,19 @@ export class VertexGeminiGenerator {
       throw new Error("Failed to obtain OAuth access token from service account");
     }
 
-    // Vertex AI Gemini uses the Generative Language API endpoint with OAuth
-    // Format: https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
-    // But we need to use Vertex AI endpoint for OAuth authentication
-    // Actually, Vertex AI Gemini might use: https://{location}-aiplatform.googleapis.com/v1beta/projects/{project}/locations/{location}/publishers/google/models/{model}:generateContent
-    // Or: https://{location}-generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
-    
-    // Try Vertex AI Generative AI endpoint first
+    // Vertex AI Gemini - try multiple endpoint formats
+    // Option 1: Vertex AI Generative AI endpoint (standard)
+    // Format: https://{location}-aiplatform.googleapis.com/v1beta/{modelPath}:generateContent
     let url = `https://${this.apiEndpoint}/v1beta/${this.modelPath}:generateContent`;
     
-    // Alternative: Try Generative Language API endpoint (but this might not work with Vertex AI auth)
-    // url = `https://generativelanguage.googleapis.com/v1beta/models/${this.modelName}:generateContent`;
+    // Option 2: Try v1 instead of v1beta
+    // Option 3: Try Generative Language API endpoint with OAuth (Vertex AI uses this for Gemini)
+    // Format: https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
+    // But this might require different authentication
     
     console.log(`[Vertex Gemini] Calling: ${url}`);
+    console.log(`[Vertex Gemini] Model path: ${this.modelPath}`);
+    console.log(`[Vertex Gemini] Model name: ${this.modelName}`);
 
     const payload = {
       contents: [
