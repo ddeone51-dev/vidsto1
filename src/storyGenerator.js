@@ -1,13 +1,24 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { VertexGeminiGenerator } from "./vertexGeminiGenerator.js";
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
 
 export class StoryGenerator {
   /**
-   * @param {{ apiKey?: string, modelName?: string, model?: { generateContent(input: any): Promise<any> } }} options
+   * @param {{ apiKey?: string, modelName?: string, model?: { generateContent(input: any): Promise<any> }, useVertexAI?: boolean }} options
    */
-  constructor({ apiKey, modelName = DEFAULT_MODEL, model } = {}) {
-    if (!model) {
+  constructor({ apiKey, modelName = DEFAULT_MODEL, model, useVertexAI } = {}) {
+    // Check if we should use Vertex AI (via env var or parameter)
+    const shouldUseVertexAI = useVertexAI ?? (process.env.USE_VERTEX_AI_GEMINI === "true" || process.env.USE_VERTEX_AI_GEMINI === "1");
+    
+    if (shouldUseVertexAI) {
+      // Use Vertex AI Gemini
+      console.log("[StoryGenerator] Using Vertex AI Gemini for story generation");
+      this.vertexGemini = new VertexGeminiGenerator({ modelName: modelName === "gemini-2.5-flash" ? "gemini-1.5-flash" : modelName });
+      this.useVertexAI = true;
+      this.model = null; // Not used when using Vertex AI
+    } else if (!model) {
+      // Use Gemini API (default)
       const resolvedKey = apiKey ?? process.env.GOOGLE_API_KEY;
       if (!resolvedKey) {
         throw new Error("Missing Google API key. Set GOOGLE_API_KEY or pass apiKey.");
@@ -38,8 +49,12 @@ export class StoryGenerator {
           },
         ],
       });
+      this.useVertexAI = false;
+      this.vertexGemini = null;
     } else {
       this.model = model;
+      this.useVertexAI = false;
+      this.vertexGemini = null;
     }
   }
 
@@ -53,6 +68,26 @@ export class StoryGenerator {
     const prompt = buildStoryPrompt({ title, language, minutes, summary, genre, ageRange, setting, theme, pacing });
     
     console.log(`Generating story: "${title}" (${minutes} minutes, ${language})...`);
+    
+    // Use Vertex AI if enabled
+    if (this.useVertexAI && this.vertexGemini) {
+      try {
+        const story = await this.vertexGemini.generateContent(prompt, {
+          temperature: 0.9,
+          maxOutputTokens: 8192,
+          topP: 0.95,
+          topK: 40,
+        });
+        console.log(`Story generated successfully (${story.length} characters)`);
+        return story;
+      } catch (error) {
+        const errorMsg = error.message || String(error) || "";
+        if (errorMsg.includes("PROHIBITED_CONTENT") || errorMsg.includes("safety")) {
+          throw new Error(`Content blocked by safety filters: PROHIBITED_CONTENT. Google's Gemini API has a non-configurable PROHIBITED_CONTENT filter. Please try rephrasing your story or using more neutral language.`);
+        }
+        throw error;
+      }
+    }
     
     // Add timeout wrapper for API call (120 seconds)
     const timeoutPromise = new Promise((_, reject) => {

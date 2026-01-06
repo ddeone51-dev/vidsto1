@@ -13,6 +13,7 @@ export {
 export { ImageGenerator } from "./imageGenerator.js";
 export { LeonardoImageGenerator } from "./leonardoImageGenerator.js";
 export { VertexAIImageGenerator } from "./vertexAIImageGenerator.js";
+export { VertexGeminiGenerator } from "./vertexGeminiGenerator.js";
 export { TTSGenerator } from "./ttsGenerator.js";
 export { SpeechToText } from "./speechToText.js";
 export { VideoAssembler } from "./videoAssembler.js";

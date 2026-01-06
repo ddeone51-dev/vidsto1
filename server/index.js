@@ -15,6 +15,9 @@ import {
   VideoAssembler,
 } from "../src/index.js";
 
+// Check if we should use Vertex AI for Gemini (story/scene generation)
+const useVertexAIGemini = process.env.USE_VERTEX_AI_GEMINI === "true" || process.env.USE_VERTEX_AI_GEMINI === "1";
+
 const port = process.env.PORT || 4000;
 
 // Select image provider based on IMAGE_PROVIDER env var
@@ -36,10 +39,11 @@ console.log(`  IMAGE_PROVIDER: ${process.env.IMAGE_PROVIDER || 'not set (default
 console.log(`  LEONARDO_API_KEY: ${process.env.LEONARDO_API_KEY ? 'SET (length: ' + process.env.LEONARDO_API_KEY.length + ')' : 'NOT SET'}`);
 console.log(`  GOOGLE_CLOUD_PROJECT_ID: ${process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || 'NOT SET (will be read from service account JSON)'}`);
 console.log(`  GOOGLE_CLOUD_LOCATION: ${process.env.GOOGLE_CLOUD_LOCATION || 'NOT SET (defaults to us-central1)'}`);
+console.log(`  USE_VERTEX_AI_GEMINI: ${useVertexAIGemini ? 'true (using Vertex AI for story/scene generation)' : 'false (using Gemini API)'}`);
 
 const generators = {
-  story: new StoryGenerator({}),
-  scenes: new SceneBreakdownGenerator({}),
+  story: new StoryGenerator({ useVertexAI: useVertexAIGemini }),
+  scenes: new SceneBreakdownGenerator({ useVertexAI: useVertexAIGemini }),
   narration: new NarrationGenerator({}),
   images: createImageGenerator(),
   tts: new TTSGenerator({ provider: "gcp" }), // Uses Google Cloud Text-to-Speech API

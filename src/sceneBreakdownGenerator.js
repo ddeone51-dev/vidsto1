@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { VertexGeminiGenerator } from "./vertexGeminiGenerator.js";
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
 
@@ -7,10 +8,20 @@ const DEFAULT_MODEL = "gemini-2.5-flash";
  */
 export class SceneBreakdownGenerator {
   /**
-   * @param {{ apiKey?: string, modelName?: string, model?: { generateContent(input: any): Promise<any> } }} options
+   * @param {{ apiKey?: string, modelName?: string, model?: { generateContent(input: any): Promise<any> }, useVertexAI?: boolean }} options
    */
-  constructor({ apiKey, modelName = DEFAULT_MODEL, model } = {}) {
-    if (!model) {
+  constructor({ apiKey, modelName = DEFAULT_MODEL, model, useVertexAI } = {}) {
+    // Check if we should use Vertex AI (via env var or parameter)
+    const shouldUseVertexAI = useVertexAI ?? (process.env.USE_VERTEX_AI_GEMINI === "true" || process.env.USE_VERTEX_AI_GEMINI === "1");
+    
+    if (shouldUseVertexAI) {
+      // Use Vertex AI Gemini
+      console.log("[SceneBreakdownGenerator] Using Vertex AI Gemini for scene generation");
+      this.vertexGemini = new VertexGeminiGenerator({ modelName: modelName === "gemini-2.5-flash" ? "gemini-1.5-flash" : modelName });
+      this.useVertexAI = true;
+      this.model = null; // Not used when using Vertex AI
+    } else if (!model) {
+      // Use Gemini API (default)
       const resolvedKey = apiKey ?? process.env.GOOGLE_API_KEY;
       if (!resolvedKey) {
         throw new Error("Missing Google API key. Set GOOGLE_API_KEY or pass apiKey.");
@@ -41,8 +52,12 @@ export class SceneBreakdownGenerator {
           },
         ],
       });
+      this.useVertexAI = false;
+      this.vertexGemini = null;
     } else {
       this.model = model;
+      this.useVertexAI = false;
+      this.vertexGemini = null;
     }
   }
 
@@ -66,25 +81,36 @@ export class SceneBreakdownGenerator {
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const generationConfig = {
-          maxOutputTokens: 2048,
-          temperature: 0.3,
-          topP: 0.9,
-        };
+        let text;
+        
+        // Use Vertex AI if enabled
+        if (this.useVertexAI && this.vertexGemini) {
+          text = await this.vertexGemini.generateContent(prompt, {
+            maxOutputTokens: 2048,
+            temperature: 0.3,
+            topP: 0.9,
+          });
+        } else {
+          const generationConfig = {
+            maxOutputTokens: 2048,
+            temperature: 0.3,
+            topP: 0.9,
+          };
 
-        const response = await this.model.generateContent({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig,
-          safetySettings: [
-            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
-            { category: "HARM_CATEGORY_CIVIC_INTEGRITY", threshold: "BLOCK_NONE" },
-          ],
-        });
+          const response = await this.model.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig,
+            safetySettings: [
+              { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+              { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+              { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+              { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+              { category: "HARM_CATEGORY_CIVIC_INTEGRITY", threshold: "BLOCK_NONE" },
+            ],
+          });
 
-        const text = extractResponseText(response);
+          text = extractResponseText(response);
+        }
         if (!text || text.trim().length === 0) {
           throw new Error("Unable to generate character profiles. Please try again.");
         }
@@ -188,41 +214,67 @@ export class SceneBreakdownGenerator {
 
         const fullPrompt = `${retryPrefix}${prompt}`;
 
-        let response;
-        response = await Promise.race([
-          this.model.generateContent({
-            contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
-            generationConfig,
-            safetySettings: [
-              { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-              { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-              { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-              { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
-              { category: "HARM_CATEGORY_CIVIC_INTEGRITY", threshold: "BLOCK_NONE" },
-            ],
-          }),
-          timeoutPromise,
-        ]);
-
-        console.log(`Received scene generation response (attempt ${attempt}/${maxAttempts})`);
-
-        // Check for safety filter blocks
-        if (response?.response?.promptFeedback?.blockReason) {
-          const blockReason = response.response.promptFeedback.blockReason;
-          if (blockReason === "PROHIBITED_CONTENT") {
-            throw new Error(
-              "Content blocked by safety filters: PROHIBITED_CONTENT. Google's Gemini API has a non-configurable PROHIBITED_CONTENT filter. Please try rephrasing your story or using more neutral language."
-            );
+        let text;
+        
+        // Use Vertex AI if enabled
+        if (this.useVertexAI && this.vertexGemini) {
+          try {
+            text = await Promise.race([
+              this.vertexGemini.generateContent(fullPrompt, {
+                maxOutputTokens: generationConfig.maxOutputTokens,
+                temperature: generationConfig.temperature,
+                topP: generationConfig.topP,
+                topK: generationConfig.topK,
+              }),
+              timeoutPromise,
+            ]);
+            console.log(`Received scene generation response (attempt ${attempt}/${maxAttempts})`);
+          } catch (error) {
+            const errorMsg = error.message || String(error) || "";
+            if (errorMsg.includes("PROHIBITED_CONTENT") || errorMsg.includes("safety")) {
+              throw new Error(
+                "Content blocked by safety filters: PROHIBITED_CONTENT. Google's Gemini API has a non-configurable PROHIBITED_CONTENT filter. Please try rephrasing your story or using more neutral language."
+              );
+            }
+            throw error;
           }
-          throw new Error(`Content blocked by safety filters: ${blockReason}. Please try rephrasing your story.`);
-        }
+        } else {
+          let response;
+          response = await Promise.race([
+            this.model.generateContent({
+              contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
+              generationConfig,
+              safetySettings: [
+                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_CIVIC_INTEGRITY", threshold: "BLOCK_NONE" },
+              ],
+            }),
+            timeoutPromise,
+          ]);
 
-        const candidates = response?.response?.candidates || response?.candidates || [];
-        if (candidates.length > 0 && candidates[0].finishReason === "SAFETY") {
-          throw new Error("Content blocked by safety filters");
-        }
+          console.log(`Received scene generation response (attempt ${attempt}/${maxAttempts})`);
 
-        const text = extractResponseText(response);
+          // Check for safety filter blocks
+          if (response?.response?.promptFeedback?.blockReason) {
+            const blockReason = response.response.promptFeedback.blockReason;
+            if (blockReason === "PROHIBITED_CONTENT") {
+              throw new Error(
+                "Content blocked by safety filters: PROHIBITED_CONTENT. Google's Gemini API has a non-configurable PROHIBITED_CONTENT filter. Please try rephrasing your story or using more neutral language."
+              );
+            }
+            throw new Error(`Content blocked by safety filters: ${blockReason}. Please try rephrasing your story.`);
+          }
+
+          const candidates = response?.response?.candidates || response?.candidates || [];
+          if (candidates.length > 0 && candidates[0].finishReason === "SAFETY") {
+            throw new Error("Content blocked by safety filters");
+          }
+
+          text = extractResponseText(response);
+        }
         if (!text || text.trim().length === 0) {
           throw new Error("Unable to generate scenes. Please try again.");
         }
